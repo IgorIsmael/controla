@@ -424,3 +424,29 @@ export async function createProfile(input: {
     throw new Error(`Erro ao criar conta no banco de dados: ${reason}`);
   }
 }
+
+/** Sets the password on an already-existing profile (e.g. a row left over
+ * from an old login flow that never had a password) instead of blocking
+ * registration with a "conflict" error. */
+export async function setProfilePassword(
+  id: string,
+  passwordHash: string,
+  displayName: string
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    const result = await db
+      .update(schema.profiles)
+      .set({ passwordHash, displayName, updatedAt: new Date() })
+      .where(eq(schema.profiles.id, id as any))
+      .returning();
+
+    return result[0];
+  } catch (err) {
+    const reason = describeDbError(err);
+    console.error("[Database] setProfilePassword failed:", reason);
+    throw new Error(`Erro ao atualizar a conta no banco de dados: ${reason}`);
+  }
+}

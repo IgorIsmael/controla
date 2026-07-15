@@ -44,19 +44,32 @@ export const appRouter = router({
         }
 
         const existing = await db.getProfileByEmail(email);
+
+        let profile;
         if (existing) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Já existe uma conta com esse e-mail. Faça login.",
+          if (existing.passwordHash) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Já existe uma conta com esse e-mail. Faça login.",
+            });
+          }
+
+          // Existe um perfil sem senha (sobra de uma tentativa antiga de login) —
+          // aproveita o registro atual para completar a conta em vez de bloquear.
+          const passwordHash = await hashPassword(input.password);
+          profile = await db.setProfilePassword(
+            existing.id,
+            passwordHash,
+            input.name.trim()
+          );
+        } else {
+          const passwordHash = await hashPassword(input.password);
+          profile = await db.createProfile({
+            email,
+            displayName: input.name.trim(),
+            passwordHash,
           });
         }
-
-        const passwordHash = await hashPassword(input.password);
-        const profile = await db.createProfile({
-          email,
-          displayName: input.name.trim(),
-          passwordHash,
-        });
 
         if (!profile) {
           throw new TRPCError({
